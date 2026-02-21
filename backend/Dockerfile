@@ -37,6 +37,7 @@ ENV PATH="/app/.venv/bin:${PATH}"
 COPY backend/migrations ./migrations
 COPY backend/alembic.ini ./alembic.ini
 COPY backend/app ./app
+COPY backend/scripts ./scripts
 
 # Copy provisioning templates.
 # In-repo these live at `backend/templates/`; runtime path is `/app/templates`.

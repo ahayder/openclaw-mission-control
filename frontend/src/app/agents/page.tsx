@@ -6,14 +6,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/auth/clerk";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { AgentsTable } from "@/components/agents/AgentsTable";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import {
   type listAgentsApiV1AgentsGetResponse,
   getListAgentsApiV1AgentsGetQueryKey,
@@ -52,6 +52,7 @@ export default function AgentsPage() {
   });
 
   const [deleteTarget, setDeleteTarget] = useState<AgentRead | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const boardsKey = getListBoardsApiV1BoardsGetQueryKey();
   const agentsKey = getListAgentsApiV1AgentsGetQueryKey();
@@ -116,6 +117,31 @@ export default function AgentsPage() {
     queryClient,
   );
 
+  const syncMutation = useMutation({
+    mutationFn: async () =>
+      customFetch<{ discovered: number; created: number; updated: number }>(
+        "/api/v1/agents/sync",
+        { method: "POST" },
+      ),
+    onSuccess: async (response) => {
+      if (response.status === 200) {
+        const result = response.data;
+        setSyncMessage(
+          `Synced ${result.discovered} local agents (${result.created} created, ${result.updated} updated).`,
+        );
+      } else {
+        setSyncMessage("Agent sync completed.");
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: agentsKey }),
+        queryClient.invalidateQueries({ queryKey: boardsKey }),
+      ]);
+    },
+    onError: (error: ApiError) => {
+      setSyncMessage(error.message);
+    },
+  });
+
   const handleDelete = () => {
     if (!deleteTarget) return;
     deleteMutation.mutate({ agentId: deleteTarget.id });
@@ -132,11 +158,21 @@ export default function AgentsPage() {
         title="Agents"
         description={`${agents.length} agent${agents.length === 1 ? "" : "s"} total.`}
         headerActions={
-          agents.length > 0 ? (
-            <Button onClick={() => router.push("/agents/new")}>
-              New agent
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSyncMessage(null);
+                syncMutation.mutate();
+              }}
+              disabled={syncMutation.isPending}
+            >
+              {syncMutation.isPending ? "Syncing..." : "Sync Local Agents"}
             </Button>
-          ) : null
+            {agents.length > 0 ? (
+              <Button onClick={() => router.push("/agents/new")}>New agent</Button>
+            ) : null}
+          </div>
         }
         isAdmin={isAdmin}
         adminOnlyMessage="Only organization owners and admins can access agents."
@@ -162,6 +198,7 @@ export default function AgentsPage() {
           />
         </div>
 
+        {syncMessage ? <p className="mt-4 text-sm text-slate-600">{syncMessage}</p> : null}
         {agentsQuery.error ? (
           <p className="mt-4 text-sm text-red-500">
             {agentsQuery.error.message}

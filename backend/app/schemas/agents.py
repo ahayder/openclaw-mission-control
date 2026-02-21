@@ -314,3 +314,11 @@ class AgentNudge(SQLModel):
         description="Short message to direct an agent toward immediate attention.",
         examples=["Please update the incident triage status for task T-001."],
     )
+
+
+class AgentSyncResponse(SQLModel):
+    """Result payload for local OpenClaw agent synchronization."""
+
+    discovered: int = Field(description="Total agents discovered from local OpenClaw config.")
+    created: int = Field(description="Number of new agents created in Mission Control.")
+    updated: int = Field(description="Number of existing agents updated in Mission Control.")
